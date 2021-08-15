@@ -5,7 +5,7 @@ go 1.16
 require (
 	cloud.google.com/go/pubsub v1.10.1
 	github.com/HdrHistogram/hdrhistogram-go v1.0.1 // indirect
-	github.com/apache/pulsar-client-go v0.6.0 // indirect
+	github.com/apache/pulsar-client-go v0.6.0
 	github.com/go-redis/redis/v8 v8.7.1
 	github.com/google/uuid v1.2.0
 	github.com/gorhill/cronexpr v0.0.0-20180427100037-88b0669f7d75
@@ -20,7 +20,6 @@ require (
 	github.com/uber/jaeger-client-go v2.25.0+incompatible
 	github.com/uber/jaeger-lib v2.4.0+incompatible // indirect
 	go.mongodb.org/mongo-driver v1.4.6
-	go.uber.org/atomic v1.7.0 // indirect
 	golang.org/x/crypto v0.0.0-20210220033148-5ea612d1eb83 // indirect
 	google.golang.org/api v0.40.0
 )
