@@ -5,6 +5,7 @@ go 1.16
 require (
 	cloud.google.com/go/pubsub v1.10.1
 	github.com/HdrHistogram/hdrhistogram-go v1.0.1 // indirect
+	github.com/apache/pulsar-client-go v0.6.0 // indirect
 	github.com/go-redis/redis/v8 v8.7.1
 	github.com/google/uuid v1.2.0
 	github.com/gorhill/cronexpr v0.0.0-20180427100037-88b0669f7d75
