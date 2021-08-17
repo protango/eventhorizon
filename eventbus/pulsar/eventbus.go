@@ -158,7 +158,7 @@ func (b *EventBus) AddHandler(ctx context.Context, m eh.EventMatcher, h eh.Event
 	consumer, err := b.client.Subscribe(pulsar.ConsumerOptions{
 		Topic:            b.topic,
 		SubscriptionName: subName,
-		Type:             pulsar.Exclusive,
+		Type:             pulsar.Shared,
 	})
 	if err != nil {
 		return fmt.Errorf("failed to create consumer: %w", err)
