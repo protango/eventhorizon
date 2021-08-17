@@ -30,9 +30,9 @@ func TestEventBusIntegration(t *testing.T) {
 	}
 
 	// Connect to localhost if not running inside docker
-	addr := os.Getenv("KAFKA_ADDR")
+	addr := os.Getenv("PULSAR_ADDR")
 	if addr == "" {
-		addr = "localhost:9093"
+		addr = "localhost:6650"
 	}
 
 	// Get a random app ID.
@@ -42,12 +42,12 @@ func TestEventBusIntegration(t *testing.T) {
 	}
 	appID := "app-" + hex.EncodeToString(b)
 
-	bus1, err := NewEventBus(addr, appID)
+	bus1, err := NewEventBus(addr, appID, WithNamespace("public", "tests"))
 	if err != nil {
 		t.Fatal("there should be no error:", err)
 	}
 
-	bus2, err := NewEventBus(addr, appID)
+	bus2, err := NewEventBus(addr, appID, WithNamespace("public", "tests"))
 	if err != nil {
 		t.Fatal("there should be no error:", err)
 	}
@@ -61,9 +61,9 @@ func TestEventBusLoadtest(t *testing.T) {
 	}
 
 	// Connect to localhost if not running inside docker
-	addr := os.Getenv("KAFKA_ADDR")
+	addr := os.Getenv("PULSAR_ADDR")
 	if addr == "" {
-		addr = "localhost:9093"
+		addr = "localhost:6650"
 	}
 
 	// Get a random app ID.
@@ -73,7 +73,7 @@ func TestEventBusLoadtest(t *testing.T) {
 	}
 	appID := "app-" + hex.EncodeToString(bts)
 
-	bus, err := NewEventBus(addr, appID)
+	bus, err := NewEventBus(addr, appID, WithNamespace("public", "tests"))
 	if err != nil {
 		t.Fatal("there should be no error:", err)
 	}
@@ -83,9 +83,9 @@ func TestEventBusLoadtest(t *testing.T) {
 
 func BenchmarkEventBus(b *testing.B) {
 	// Connect to localhost if not running inside docker
-	addr := os.Getenv("KAFKA_ADDR")
+	addr := os.Getenv("PULSAR_ADDR")
 	if addr == "" {
-		addr = "localhost:9093"
+		addr = "localhost:6650"
 	}
 
 	// Get a random app ID.
@@ -95,7 +95,7 @@ func BenchmarkEventBus(b *testing.B) {
 	}
 	appID := "app-" + hex.EncodeToString(bts)
 
-	bus, err := NewEventBus(addr, appID)
+	bus, err := NewEventBus(addr, appID, WithNamespace("public", "tests"))
 	if err != nil {
 		b.Fatal("there should be no error:", err)
 	}
