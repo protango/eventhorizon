@@ -19,12 +19,10 @@ import (
 	"errors"
 	"fmt"
 	"log"
-	"strings"
 	"sync"
 	"time"
 
-	"github.com/segmentio/kafka-go"
-
+	"github.com/apache/pulsar-client-go/pulsar"
 	eh "github.com/looplab/eventhorizon"
 	"github.com/looplab/eventhorizon/codec/json"
 )
@@ -36,8 +34,8 @@ type EventBus struct {
 	addr         string
 	appID        string
 	topic        string
-	conn         *kafka.Conn
-	writer       *kafka.Writer
+	client       pulsar.Client
+	producer     pulsar.Producer
 	registered   map[eh.EventHandlerType]struct{}
 	registeredMu sync.RWMutex
 	errCh        chan eh.EventBusError
@@ -67,33 +65,25 @@ func NewEventBus(addr, appID string, options ...Option) (*EventBus, error) {
 		}
 	}
 
-	// Get or create the topic.
-	ctx := context.Background()
-	client := &kafka.Client{
-		Addr: kafka.TCP(addr),
-	}
-	resp, err := client.CreateTopics(ctx, &kafka.CreateTopicsRequest{
-		Topics: []kafka.TopicConfig{{
-			Topic:             topic,
-			NumPartitions:     1,
-			ReplicationFactor: 1,
-		}},
+	// Connect to pulsar
+	client, err := pulsar.NewClient(pulsar.ClientOptions{
+		URL:               "pulsar://" + addr,
+		OperationTimeout:  30 * time.Second,
+		ConnectionTimeout: 30 * time.Second,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("could not get/create Kafka topic: %w", err)
+		return nil, fmt.Errorf("could not create Pulsar connection: %w", err)
 	}
-	if topicErr, ok := resp.Errors[topic]; ok && topicErr != nil {
-		if !errors.Is(topicErr, kafka.TopicAlreadyExists) {
-			return nil, fmt.Errorf("invalid Kafka topic: %w", err)
-		}
-	}
+	b.client = client
 
-	b.writer = &kafka.Writer{
-		Addr:         kafka.TCP(addr),
-		Topic:        topic,
-		BatchSize:    1,                // Write every event to the bus without delay.
-		RequiredAcks: kafka.RequireOne, // Stronger consistency.
+	// Create producer
+	producer, err := client.CreateProducer(pulsar.ProducerOptions{
+		Topic: topic,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("could not create Pulsar producer: %w", err)
 	}
+	b.producer = producer
 
 	return b, nil
 }
@@ -115,8 +105,8 @@ func (b *EventBus) HandlerType() eh.EventHandlerType {
 }
 
 const (
-	aggregateTypeHeader = "aggregate_type"
-	eventTypeHeader     = "event_type"
+	aggregateTypePropKey = "aggregate_type"
+	eventTypePropKey     = "event_type"
 )
 
 // HandleEvent implements the HandleEvent method of the eventhorizon.EventHandler interface.
@@ -126,20 +116,15 @@ func (b *EventBus) HandleEvent(ctx context.Context, event eh.Event) error {
 		return fmt.Errorf("could not marshal event: %w", err)
 	}
 
-	if err := b.writer.WriteMessages(ctx, kafka.Message{
-		Value: data,
-		Headers: []kafka.Header{
-			{
-				Key:   aggregateTypeHeader,
-				Value: []byte(event.AggregateType().String()),
-			},
-			{
-				Key:   eventTypeHeader,
-				Value: []byte(event.EventType().String()),
-			},
+	_, err = b.producer.Send(ctx, &pulsar.ProducerMessage{
+		Payload: data,
+		Properties: map[string]string{
+			eventTypePropKey:     event.EventType().String(),
+			aggregateTypePropKey: event.AggregateType().String(),
 		},
-	}); err != nil {
-		return fmt.Errorf("could not publish event: %w", err)
+	})
+	if err != nil {
+		return fmt.Errorf("could not produce event: %w", err)
 	}
 
 	return nil
@@ -162,33 +147,14 @@ func (b *EventBus) AddHandler(ctx context.Context, m eh.EventMatcher, h eh.Event
 	}
 
 	// Get or create the subscription.
-	joined := make(chan struct{})
-	groupID := b.appID + "_" + h.HandlerType().String()
-	r := kafka.NewReader(kafka.ReaderConfig{
-		Brokers:                []string{b.addr},
-		Topic:                  b.topic,
-		GroupID:                groupID,     // Send messages to only one subscriber per group.
-		MaxBytes:               100e3,       // 100KB
-		MaxWait:                time.Second, // Allow to exit readloop in max 1s.
-		PartitionWatchInterval: time.Second,
-		WatchPartitionChanges:  true,
-		StartOffset:            kafka.LastOffset, // Don't read old messages.
-		Logger: kafka.LoggerFunc(func(msg string, args ...interface{}) {
-			// NOTE: Hacky way to use logger to find out when the reader is ready.
-			if strings.HasPrefix(msg, "Joined group") {
-				select {
-				case <-joined:
-				default:
-					close(joined) // Close once.
-				}
-			}
-		}),
+	subName := b.appID + "_" + h.HandlerType().String()
+	consumer, err := b.client.Subscribe(pulsar.ConsumerOptions{
+		Topic:            b.topic,
+		SubscriptionName: subName,
+		Type:             pulsar.Exclusive,
 	})
-
-	select {
-	case <-joined:
-	case <-time.After(10 * time.Second):
-		return fmt.Errorf("did not join group in time")
+	if err != nil {
+		return fmt.Errorf("failed to create consumer: %w", err)
 	}
 
 	// Register handler.
@@ -196,7 +162,7 @@ func (b *EventBus) AddHandler(ctx context.Context, m eh.EventMatcher, h eh.Event
 
 	// Handle until context is cancelled.
 	b.wg.Add(1)
-	go b.handle(ctx, m, h, r)
+	go b.handle(ctx, m, h, consumer)
 
 	return nil
 }
@@ -209,18 +175,16 @@ func (b *EventBus) Errors() <-chan eh.EventBusError {
 // Wait for all channels to close in the event bus group
 func (b *EventBus) Wait() {
 	b.wg.Wait()
-	if err := b.writer.Close(); err != nil {
-		log.Printf("eventhorizon: failed to close Kafka writer: %s", err)
-	}
+	b.producer.Close()
 }
 
 // Handles all events coming in on the channel.
-func (b *EventBus) handle(ctx context.Context, m eh.EventMatcher, h eh.EventHandler, r *kafka.Reader) {
+func (b *EventBus) handle(ctx context.Context, m eh.EventMatcher, h eh.EventHandler, c pulsar.Consumer) {
 	defer b.wg.Done()
-	handler := b.handler(m, h, r)
+	handler := b.handler(m, h, c)
 
 	for {
-		msg, err := r.FetchMessage(ctx)
+		msg, err := c.Receive(ctx)
 		if errors.Is(err, context.Canceled) {
 			break
 		}
@@ -229,7 +193,7 @@ func (b *EventBus) handle(ctx context.Context, m eh.EventMatcher, h eh.EventHand
 			select {
 			case b.errCh <- eh.EventBusError{Err: err, Ctx: ctx}:
 			default:
-				log.Printf("eventhorizon: missed error in Kafka event bus: %s", err)
+				log.Printf("eventhorizon: missed error in Pulsar event bus: %s", err)
 			}
 			// Retry the receive loop if there was an error.
 			time.Sleep(time.Second)
@@ -239,27 +203,25 @@ func (b *EventBus) handle(ctx context.Context, m eh.EventMatcher, h eh.EventHand
 		handler(ctx, msg)
 	}
 
-	if err := r.Close(); err != nil {
-		log.Printf("eventhorizon: failed to close Kafka reader: %s", err)
-	}
+	c.Close()
 }
 
-func (b *EventBus) handler(m eh.EventMatcher, h eh.EventHandler, r *kafka.Reader) func(ctx context.Context, msg kafka.Message) {
-	return func(ctx context.Context, msg kafka.Message) {
-		event, ctx, err := b.codec.UnmarshalEvent(ctx, msg.Value)
+func (b *EventBus) handler(m eh.EventMatcher, h eh.EventHandler, c pulsar.Consumer) func(ctx context.Context, msg pulsar.Message) {
+	return func(ctx context.Context, msg pulsar.Message) {
+		event, ctx, err := b.codec.UnmarshalEvent(ctx, msg.Payload())
 		if err != nil {
 			err = fmt.Errorf("could not unmarshal event: %w", err)
 			select {
 			case b.errCh <- eh.EventBusError{Err: err, Ctx: ctx}:
 			default:
-				log.Printf("eventhorizon: missed error in GCP event bus: %s", err)
+				log.Printf("eventhorizon: missed error in Pulsar event bus: %s", err)
 			}
 			return
 		}
 
 		// Ignore non-matching events.
 		if !m.Match(event) {
-			r.CommitMessages(ctx, msg)
+			c.Ack(msg)
 			return
 		}
 
@@ -274,6 +236,6 @@ func (b *EventBus) handler(m eh.EventMatcher, h eh.EventHandler, r *kafka.Reader
 			return
 		}
 
-		r.CommitMessages(ctx, msg)
+		c.Ack(msg)
 	}
 }
