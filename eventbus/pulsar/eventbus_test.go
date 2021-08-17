@@ -42,12 +42,12 @@ func TestEventBusIntegration(t *testing.T) {
 	}
 	appID := "app-" + hex.EncodeToString(b)
 
-	bus1, err := NewEventBus(addr, appID, WithNamespace("public", "tests"))
+	bus1, err := NewEventBus(addr, appID)
 	if err != nil {
 		t.Fatal("there should be no error:", err)
 	}
 
-	bus2, err := NewEventBus(addr, appID, WithNamespace("public", "tests"))
+	bus2, err := NewEventBus(addr, appID)
 	if err != nil {
 		t.Fatal("there should be no error:", err)
 	}
@@ -73,7 +73,7 @@ func TestEventBusLoadtest(t *testing.T) {
 	}
 	appID := "app-" + hex.EncodeToString(bts)
 
-	bus, err := NewEventBus(addr, appID, WithNamespace("public", "tests"))
+	bus, err := NewEventBus(addr, appID)
 	if err != nil {
 		t.Fatal("there should be no error:", err)
 	}
