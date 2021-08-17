@@ -43,7 +43,7 @@ type EventBus struct {
 	codec        eh.EventCodec
 }
 
-// NewEventBus creates an EventBus, with optional GCP connection settings.
+// NewEventBus creates an EventBus, with optional connection settings.
 func NewEventBus(addr, appID string, options ...Option) (*EventBus, error) {
 	topic := appID + "_events"
 	b := &EventBus{
@@ -95,6 +95,13 @@ type Option func(*EventBus) error
 func WithCodec(codec eh.EventCodec) Option {
 	return func(b *EventBus) error {
 		b.codec = codec
+		return nil
+	}
+}
+
+func WithNamespace(tenant, namespace string) Option {
+	return func(b *EventBus) error {
+		b.topic = fmt.Sprintf("%s/%s/%s", tenant, namespace, b.topic)
 		return nil
 	}
 }
