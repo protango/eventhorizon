@@ -78,7 +78,7 @@ func NewEventBus(addr, appID string, options ...Option) (*EventBus, error) {
 
 	// Create producer
 	producer, err := client.CreateProducer(pulsar.ProducerOptions{
-		Topic: topic,
+		Topic: b.topic,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("could not create Pulsar producer: %w", err)
