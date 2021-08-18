@@ -1,0 +1,10 @@
+syntax = "proto3";
+
+option go_package = "github.com/looplab/eventhorizon/codec/proto";
+
+package codec.proto;
+
+message Event {
+    string EventType = 1;
+    string Timestamp = 2;
+}
