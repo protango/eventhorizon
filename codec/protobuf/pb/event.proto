@@ -1,8 +1,8 @@
 syntax = "proto3";
 
-option go_package = "github.com/looplab/eventhorizon/codec/proto";
+option go_package = "github.com/looplab/eventhorizon/codec/protobuf/pb";
 
-package codec.proto;
+package codec.protobuf.pb;
 
 import "google/protobuf/timestamp.proto";
 

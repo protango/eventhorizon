@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package proto
+package protobuf
 
 import (
 	"context"
@@ -20,6 +20,7 @@ import (
 	"fmt"
 
 	eh "github.com/looplab/eventhorizon"
+	"github.com/looplab/eventhorizon/codec/protobuf/pb"
 	"github.com/looplab/eventhorizon/uuid"
 	"google.golang.org/protobuf/proto"
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
@@ -41,7 +42,7 @@ func (c *EventCodec) MarshalEvent(ctx context.Context, event eh.Event) ([]byte, 
 		return nil, fmt.Errorf("could not marshal event context as JSON: %w", err)
 	}
 
-	e := Event{
+	e := pb.Event{
 		EventType:     event.EventType().String(),
 		Timestamp:     timestamppb.New(event.Timestamp()),
 		AggregateType: event.AggregateType().String(),
@@ -77,7 +78,7 @@ func (c *EventCodec) MarshalEvent(ctx context.Context, event eh.Event) ([]byte, 
 // UnmarshalEvent unmarshals an event from bytes in JSON format.
 func (c *EventCodec) UnmarshalEvent(ctx context.Context, b []byte) (eh.Event, context.Context, error) {
 	// Decode the raw JSON event data.
-	var e Event = Event{}
+	e := pb.Event{}
 	if err := proto.Unmarshal(b, &e); err != nil {
 		return nil, nil, fmt.Errorf("could not unmarshal event: %w", err)
 	}

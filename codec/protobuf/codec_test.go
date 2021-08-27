@@ -12,7 +12,7 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-package proto
+package protobuf
 
 import (
 	"bytes"
@@ -21,6 +21,7 @@ import (
 	"time"
 
 	eh "github.com/looplab/eventhorizon"
+	"github.com/looplab/eventhorizon/codec/protobuf/pb"
 	"github.com/looplab/eventhorizon/mocks"
 	"github.com/looplab/eventhorizon/uuid"
 	"google.golang.org/protobuf/proto"
@@ -34,12 +35,12 @@ func TestEventCodec(t *testing.T) {
 	id := uuid.MustParse("10a7ec0f-7f2b-46f5-bca1-877b6e33c9fd")
 	timestamp := time.Date(2009, time.November, 10, 23, 0, 0, 0, time.UTC)
 	metadata := map[string]interface{}{"num": 42.0}
-	eventData := TestData{
+	eventData := pb.TestData{
 		Value: "Test data",
 	}
 
 	// Register with eh
-	eh.RegisterEventData(eventType, func() eh.EventData { return &TestData{} })
+	eh.RegisterEventData(eventType, func() eh.EventData { return &pb.TestData{} })
 
 	// Init codec
 	c := &EventCodec{}
@@ -50,7 +51,7 @@ func TestEventCodec(t *testing.T) {
 		t.Error("Failed to set up expected bytes:", err)
 	}
 
-	ehEvent := Event{
+	ehEvent := pb.Event{
 		EventType:     string(eventType),
 		Timestamp:     timestamppb.New(timestamp),
 		AggregateType: string(mocks.AggregateType),
