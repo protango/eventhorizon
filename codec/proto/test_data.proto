@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+option go_package = "github.com/looplab/eventhorizon/codec/proto";
+
+package codec.proto;
+
+message TestData {
+    string Value = 1;
+}

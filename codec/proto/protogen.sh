@@ -1,1 +1,1 @@
-protoc --go_out=. event.proto --go_opt=paths=source_relative
+protoc --go_out=. *.proto --go_opt=paths=source_relative
