@@ -17,13 +17,16 @@ package eventhorizon
 import (
 	"fmt"
 	"reflect"
+
+	"google.golang.org/protobuf/proto"
 )
 
 // CompareConfig is a config for the ComparEvents function.
 type CompareConfig struct {
-	ignoreTimestamp bool
-	ignoreVersion   bool
-	ignorePosition  bool
+	ignoreTimestamp    bool
+	ignoreVersion      bool
+	ignorePosition     bool
+	compareDataAsProto bool
 }
 
 // CompareOption is an option setter used to configure comparing of events.
@@ -50,6 +53,13 @@ func IgnorePositionMetadata() CompareOption {
 	}
 }
 
+// CompareDataAsProto compares the data in events as protobuf messages.
+func CompareDataAsProto() CompareOption {
+	return func(o *CompareConfig) {
+		o.compareDataAsProto = true
+	}
+}
+
 // CompareEvents compares two events, with options for ignoring timestamp,
 // version etc.
 func CompareEvents(e1, e2 Event, options ...CompareOption) error {
@@ -64,9 +74,17 @@ func CompareEvents(e1, e2 Event, options ...CompareOption) error {
 	if e1.EventType() != e2.EventType() {
 		return fmt.Errorf("incorrect event type: %s (should be %s)", e1.EventType(), e2.EventType())
 	}
-	if !reflect.DeepEqual(e1.Data(), e2.Data()) {
+
+	var dataIsEqual bool
+	if !opts.compareDataAsProto {
+		dataIsEqual = reflect.DeepEqual(e1.Data(), e2.Data())
+	} else {
+		dataIsEqual = proto.Equal(e1.Data().(proto.Message), e2.Data().(proto.Message))
+	}
+	if !dataIsEqual {
 		return fmt.Errorf("incorrect event data: %s (should be %s)", e1.Data(), e2.Data())
 	}
+
 	if !opts.ignoreTimestamp {
 		if !e1.Timestamp().Equal(e2.Timestamp()) {
 			return fmt.Errorf("incorrect timestamp: %s (should be %s)", e1.Timestamp(), e2.Timestamp())
