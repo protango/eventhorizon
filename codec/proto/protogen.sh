@@ -1,0 +1,1 @@
+protoc --go_out=. event.proto --go_opt=paths=source_relative
