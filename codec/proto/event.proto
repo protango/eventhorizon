@@ -13,6 +13,6 @@ message Event {
     string AggregateType = 4;
     string AggregateID = 5;
     int32 Version = 6;
-    map<string, bytes> Metadata = 7;
-    map<string, bytes> Context = 8;
+    bytes Metadata = 7;
+    bytes Context = 8;
 }

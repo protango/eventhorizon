@@ -25,45 +25,20 @@ import (
 	timestamppb "google.golang.org/protobuf/types/known/timestamppb"
 )
 
-func marshalMap(source map[string]interface{}) (map[string][]byte, error) {
-	result := make(map[string][]byte)
-	for key, element := range source {
-		bytes, err := json.Marshal(element)
-		if err != nil {
-			return nil, fmt.Errorf("could not marshal interface as JSON: %w", err)
-		}
-		result[key] = bytes
-	}
-
-	return result, nil
-}
-
-func unmarshalMap(source map[string][]byte) (map[string]interface{}, error) {
-	result := make(map[string]interface{})
-	for key, element := range source {
-		err := json.Unmarshal(element, result[key])
-		if err != nil {
-			return nil, fmt.Errorf("could not unmarshal bytes as JSON: %w", err)
-		}
-	}
-
-	return result, nil
-}
-
 // EventCodec is a codec for marshaling and unmarshaling events
 // to and from bytes in JSON format.
 type EventCodec struct{}
 
 // MarshalEvent marshals an event into bytes in JSON format.
 func (c *EventCodec) MarshalEvent(ctx context.Context, event eh.Event) ([]byte, error) {
-	marshalledMetadata, err := marshalMap(event.Metadata())
+	marshaledMetadata, err := json.Marshal(event.Metadata())
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("could not marshal event metadata as JSON: %w", err)
 	}
 
-	marshaledContext, err := marshalMap(eh.MarshalContext(ctx))
+	marshaledContext, err := json.Marshal(eh.MarshalContext(ctx))
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("could not marshal event context as JSON: %w", err)
 	}
 
 	e := Event{
@@ -73,7 +48,7 @@ func (c *EventCodec) MarshalEvent(ctx context.Context, event eh.Event) ([]byte, 
 		AggregateID:   event.AggregateID().String(),
 		Version:       int32(event.Version()),
 		Context:       marshaledContext,
-		Metadata:      marshalledMetadata,
+		Metadata:      marshaledMetadata,
 	}
 
 	// Marshal event data if there is any.
@@ -127,14 +102,13 @@ func (c *EventCodec) UnmarshalEvent(ctx context.Context, b []byte) (eh.Event, co
 	}
 
 	// Unmarshal metadata
-	unmarshaledMetadata, err := unmarshalMap(e.Metadata)
-	if err != nil {
+	var unmarshaledMetadata, unmarshaledCtx map[string]interface{}
+	if err := json.Unmarshal(e.Metadata, &unmarshaledMetadata); err != nil {
 		return nil, nil, fmt.Errorf("could not unmarshal event metadata: %w", err)
 	}
 
 	// Unmarshal context
-	unmarshaledCtx, err := unmarshalMap(e.Context)
-	if err != nil {
+	if err := json.Unmarshal(e.Context, &unmarshaledCtx); err != nil {
 		return nil, nil, fmt.Errorf("could not unmarshal event context: %w", err)
 	}
 
